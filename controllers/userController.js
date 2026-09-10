@@ -1,34 +1,20 @@
 const bcrypt = require("bcrypt")
 const jwt = require("jsonwebtoken")
-const AppDataSource = require("../config/db")
-const User = require("../entities/user")
+const userService = require("../services/userService")
 
 const getUsers = async (req, res)=>{
     try {
-        const userRepository = AppDataSource.getRepository("User")
-    
-        const users = await userRepository.find()
-    
+        const users = await userService.getUsers()
         res.json(users)
     } catch (error) {
-    console.error("GET USERS ERROR:", error)
-    res.status(500).json({
-    message: "Server error"
-})
-}
+        res.json(error.message)
+    }
 }
 
 const getUserbyId = async (req, res)=>{
-    try {
-        const userRepository = AppDataSource.getRepository("User")
-    
-        const user = await userRepository.findOne({
-            where: {id: req.params.id},
-            relations: {
-                tasks: true
-            }
-        })
-    
+    try {        
+    const user = await userService.getUserById(req.params.id)
+
         if (!user) {
         return res.status(404).json({message: "User not found"})
      }
@@ -37,56 +23,45 @@ const getUserbyId = async (req, res)=>{
 
     } 
     catch (error) {
-    console.error("GET USER ERROR:", error)
-    res.status(500).json({
-    message: "Server error"
-})
+    res.json(error.message)
 }
 }
 
 const registerUser = async (req, res)=>{
     try {
-        const salt = await bcrypt.genSalt()
-        const hashedPassword = await bcrypt.hash(req.body.password, salt)
-
-        const userRepository = AppDataSource.getRepository("User")
-        const user = await userRepository.create({
-            name: req.body.name,
-            email: req.body.email,
-            password: hashedPassword
-        })
-        await userRepository.save(user)
-        res.json(user)
+        const user = await userService.registerUser(req.body.name, req.body.email, req.body.password)
+        
+        const { password, ...userWithoutPassword } = user
+        res.json(userWithoutPassword)
 
     } catch (error) {
         res.json(error.message)
     }
 }
 
-const loginUser = async (req, res)=>{
-    const userRepository = AppDataSource.getRepository("User")
-    const user = await userRepository
-    .createQueryBuilder("user")
-    .addSelect("user.password")
-    .where("user.name = :name", {name: req.body.name})
-    .andWhere("user.email = :email", {email: req.body.email})
-    .getOne()
-
-    if (user == null) {
-        return res.send("User does not exist")
-    }
-
+const loginUser = async (req, res) => {
     try {
-        if (await bcrypt.compare(req.body.password, user.password)){
-            const token = jwt.sign(
-                {id: user.id},
-                process.env.JWT_SECRET,
-                {expiresIn: "1h"}
+        const user = await userService.loginUser(
+            req.body.name,
+            req.body.email
         )
-        res.send(token)            
-        } else{
+
+        if (user == null) {
+            return res.send("User does not exist")
+        }
+
+        if (await bcrypt.compare(req.body.password, user.password)) {
+            const token = jwt.sign(
+                { id: user.id },
+                process.env.JWT_SECRET,
+                { expiresIn: "1h" }
+            )
+
+            res.send(token)
+        } else {
             res.send("Wrong password")
         }
+
     } catch (error) {
         res.json(error.message)
     }
@@ -98,19 +73,7 @@ const updateUser = async (req, res)=>{
             return res.send("Warning: Cannot edit another user!")
         }
 
-        const userRepository = AppDataSource.getRepository("User")
-        const user = await userRepository.findOne({
-        where: {id: req.params.id}
-    })
-
-        const salt = await bcrypt.genSalt()
-        const hashedPassword = await bcrypt.hash(req.body.password, salt)
-
-        user.name = req.body.name,
-        user.email = req.body.email,
-        user.password = hashedPassword
-
-        await userRepository.save(user)
+        const user = await userService.updateUser(req.params.id, req.body.name, req.body.email, req.body.password)
 
         const { password, ...userWithoutPassword } = user
         res.json(userWithoutPassword)
@@ -125,11 +88,7 @@ const deleteUser = async (req, res)=>{
              return res.send("Warning: Cannot delete another user!")
          }
 
-        const userRepository = AppDataSource.getRepository("User")
-        const user = await userRepository.findOne({
-        where: {id: req.params.id}
-    })
-        await userRepository.remove(user)
+         await userService.deleteUser(req.params.id)
 
         res.send("User deleted succesfully!")
     } catch (error) {

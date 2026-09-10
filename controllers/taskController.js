@@ -1,63 +1,32 @@
-const AppDataSource = require("../config/db")
-const Task = require("../entities/task")
+const taskService = require("../services/taskService")
 
 const getTasks = async (req, res)=>{
    try {
-     const taskRepository = AppDataSource.getRepository("Task")
-
-     const tasks = await taskRepository.find({
-        relations: {
-            user: true
-        }
-     })
-
+     const tasks = await taskService.getTasks()
      res.json(tasks)
-
  }
     catch (error) {
-    console.error("GET TASKS ERROR:", error)
-    res.status(500).json({
-    message: "Server error"
-})
+    res.json(error.message)
 }
 }
 
 const getTaskById = async (req, res)=>{
    try {
-     const taskRepository = AppDataSource.getRepository("Task")
-
-     const task = await taskRepository.findOne({
-        where: {id: req.params.id},
-        relations: {
-            user: true
-        }
-     })
+     const task = await taskService.getTaskById(req.params.id)
 
      if (!task) {
         return res.status(404).json({message: "Task not found"})
      }
-
      res.json(task)
-
  }
     catch (error) {
-    console.error("GET TASK ERROR:", error)
-    res.status(500).json({
-    message: "Server error"
-})
+res.json(error.message)
 }
 }
 
 const createTask = async(req, res)=>{
    try {
-      const taskRepository = AppDataSource.getRepository("Task")
-      const task = await taskRepository.create({
-         title: req.body.title,
-         description: req.body.description,
-         user_id: req.user.id
-         
-      })
-      await taskRepository.save(task)
+const task = await taskService.createTask(req.body.title, req.body.description, req.user.id)
       res.json(task)
    } catch (error) {
       res.json(error.message)
@@ -66,10 +35,7 @@ const createTask = async(req, res)=>{
 
 const updateTask = async(req, res)=>{
    try {
-      const taskRepository = AppDataSource.getRepository("Task")
-      const task = await taskRepository.findOne({
-         where: {id: req.params.id}
-            })
+      const task = await taskService.getTaskById(req.params.id)
 
             if (!task) {
         return res.status(404).json({message: "Task not found"})
@@ -77,14 +43,10 @@ const updateTask = async(req, res)=>{
 
       if (task.user_id !== req.user.id) {
          return res.send("Warning: Cannot edit another users task")
-      }      
-
-      task.title = req.body.title,
-      task.description = req.body.description,
-      task.user_id = req.user.id
-
-      await taskRepository.save(task)
-      res.json(task)
+      }  
+      
+      const updatedTask = await taskService.updateTask(req.params.id, req.body.title, req.body.description, req.user.id)
+      res.json(updatedTask)
    } catch (error) {
       res.json(error.message)
    }
@@ -92,11 +54,7 @@ const updateTask = async(req, res)=>{
 
 const deleteTask = async(req, res)=>{
    try {
-      const taskRepository = AppDataSource.getRepository("Task")
-   
-      const task = await taskRepository.findOne({
-         where: {id: req.params.id}
-      })
+         const task = await taskService.getTaskById(req.params.id)
 
       if (!task) {
         return res.status(404).json({message: "Task not found"})
@@ -106,7 +64,8 @@ const deleteTask = async(req, res)=>{
          return res.send("Warning: Cannot delete another users task")
       }   
 
-      await taskRepository.remove(task)
+      await taskService.deleteTask(req.params.id)
+
       res.send("Task succesfully deleted")
    } catch (error) {
       res.json(error.message)
